@@ -1,0 +1,4 @@
+/vendor/raylib
+/zig-out/bin
+/.claude
+/.zig-cache
