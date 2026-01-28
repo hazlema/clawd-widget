@@ -4,7 +4,7 @@ A lightweight desktop widget for monitoring [Clawdbot](https://github.com/clawdb
 
 Built with **Zig + Raylib** for maximum performance and minimal footprint.
 
-![Clawd Widget Screenshot](screenshot.png)
+![Clawd Widget Screenshot](screenshot.png?2)
 
 ## ✨ Features
 
