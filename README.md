@@ -11,6 +11,8 @@ Built with **Zig + Raylib** for maximum performance and minimal footprint.
 - 🎯 **Live Cron Job Monitoring** - See all your Clawdbot scheduled tasks at a glance
 - ⏱️ **Next Run Countdown** - Know exactly when each job will execute
 - 🔄 **Auto-Refresh** - Updates every 30 seconds (or press `R` to refresh manually)
+- 🎮 **Job Controls** - Run, Stop, or Start jobs directly from the widget
+- 📄 **Status Tooltips** - Hover over jobs to see status file contents (word-wrapped)
 - 🎨 **Dark Theme UI** - Easy on the eyes with color-coded status indicators
 - 📏 **Resizable Window** - Adjust to fit your workflow
 - 🪶 **Tiny Binary** - Under 1MB with zero dependencies
@@ -67,10 +69,49 @@ The widget automatically:
 2. Connects to the gateway using your configured auth token
 3. Displays all active cron jobs with countdown timers
 
-### Keyboard Shortcuts
+### Command Line Options
+
+```
+Usage: clawd-widget [OPTIONS]
+
+Options:
+  -c, --config <path>      Path to clawdbot config file
+                           (default: ~/.clawdbot/clawdbot.json)
+  -s, --status-dir <path>  Directory for job status files
+                           (default: ~/clawd/cron-status)
+  -d, --debug              Print API calls to stderr
+  -h, --help               Show help message
+```
+
+**Examples:**
+```bash
+# Use default paths
+./clawd-widget
+
+# Custom config location
+./clawd-widget -c /path/to/clawdbot.json
+
+# Custom status directory
+./clawd-widget -s /path/to/status-files
+```
+
+### Controls
 
 - **R** - Manual refresh
+- **Run** button - Execute job immediately (force runs even if not due)
+- **Enable/Disable** button - Toggle job enabled state
+- **Hover job name** - View status file preview (if exists)
 - **ESC** - Close window (or click the X)
+
+### Status Files
+
+Jobs can write status information to markdown files that the widget displays as tooltips:
+
+```
+~/clawd/cron-status/[job-id].md
+```
+
+Hover over a job name to see the status file contents (with word-wrap).
 
 ## 🏗️ Architecture
 
@@ -117,6 +158,9 @@ Current features:
 - ✅ Auto-refresh
 - ✅ Resizable window
 - ✅ Manual refresh (R key)
+- ✅ Run/Stop/Start job buttons
+- ✅ Status file tooltips with word-wrap
+- ✅ CLI options for custom paths
 
 Planned:
 - 🔲 System tray integration
@@ -124,7 +168,7 @@ Planned:
 - 🔲 Custom backgrounds
 - 🔲 Windows/Mac builds
 - 🔲 Click to open Clawdbot web UI
-- 🔲 Job action buttons (pause/run now)
+- ✅ Job action buttons (Run now / Stop / Start)
 
 ### Building Tips
 
