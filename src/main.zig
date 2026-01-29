@@ -116,14 +116,22 @@ pub fn main() !void {
 
     rl.SetWindowState(rl.FLAG_WINDOW_RESIZABLE);
 
-    // Load custom font from executable directory
+    // Load custom fonts at exact sizes for crisp rendering
     var exe_dir_buf: [std.fs.max_path_bytes]u8 = undefined;
     const exe_dir = std.fs.selfExeDirPath(&exe_dir_buf) catch ".";
     var font_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const font_path = std.fmt.bufPrintZ(&font_path_buf, "{s}/DejaVuSans.ttf", .{exe_dir}) catch "DejaVuSans.ttf";
-    const font = rl.LoadFontEx(font_path.ptr, 48, null, 0);
-    defer rl.UnloadFont(font);
 
+    const font_large = rl.LoadFontEx(font_path.ptr, 24, null, 0); // titles
+    const font_medium = rl.LoadFontEx(font_path.ptr, 18, null, 0); // job names, markers
+    const font_small = rl.LoadFontEx(font_path.ptr, 14, null, 0); // buttons, tooltips, status
+    defer rl.UnloadFont(font_large);
+    defer rl.UnloadFont(font_medium);
+    defer rl.UnloadFont(font_small);
+
+    rl.SetTextureFilter(font_large.texture, rl.TEXTURE_FILTER_BILINEAR);
+    rl.SetTextureFilter(font_medium.texture, rl.TEXTURE_FILTER_BILINEAR);
+    rl.SetTextureFilter(font_small.texture, rl.TEXTURE_FILTER_BILINEAR);
     rl.SetTargetFPS(60);
 
     // Fetch initial data
@@ -175,7 +183,7 @@ pub fn main() !void {
         const screen_height = rl.GetScreenHeight();
 
         // Title
-        rl.DrawTextEx(font, "Clawd Cron Jobs", .{ .x = 20, .y = 20 }, 24, 1, rl.Color{ .r = 255, .g = 255, .b = 255, .a = 255 });
+        rl.DrawTextEx(font_large, "Clawd Cron Jobs", .{ .x = 20, .y = 20 }, 24, 1, rl.Color{ .r = 255, .g = 255, .b = 255, .a = 255 });
 
         // Help button (top-right)
         const help_btn = drawButton(
@@ -185,14 +193,14 @@ pub fn main() !void {
             25,
             "?",
             rl.Color{ .r = 80, .g = 80, .b = 120, .a = 255 },
-            font,
+            font_small,
         );
         const help_hovered = isButtonHovered(help_btn); // Track for deferred tooltip
 
         // Job count
         var count_buf: [64]u8 = undefined;
         const count_text = std.fmt.bufPrintZ(&count_buf, "{d} jobs", .{jobs.len}) catch "Jobs";
-        rl.DrawTextEx(font, count_text.ptr, .{ .x = 20, .y = 50 }, 16, 1, rl.Color{ .r = 150, .g = 150, .b = 150, .a = 255 });
+        rl.DrawTextEx(font_medium, count_text.ptr, .{ .x = 20, .y = 50 }, 16, 1, rl.Color{ .r = 150, .g = 150, .b = 150, .a = 255 });
 
         // Draw jobs
         var y_pos: f32 = 90;
@@ -218,7 +226,7 @@ pub fn main() !void {
             const marker = if (job.enabled) "●" else "○";
             var marker_buf: [4]u8 = undefined;
             const marker_z = std.fmt.bufPrintZ(&marker_buf, "{s}", .{marker}) catch ".";
-            rl.DrawTextEx(font, marker_z.ptr, .{ .x = 30, .y = y_pos }, 18, 1, color);
+            rl.DrawTextEx(font_medium, marker_z.ptr, .{ .x = 30, .y = y_pos }, 18, 1, color);
 
             // Job name (truncate if too long)
             var name_buf: [128]u8 = undefined;
@@ -229,7 +237,7 @@ pub fn main() !void {
                 std.fmt.bufPrintZ(&name_buf, "{s}", .{job.name}) catch "?";
 
             // Calculate name bounds for hover detection
-            const name_width = rl.MeasureTextEx(font, name_text.ptr, 18, 1).x;
+            const name_width = rl.MeasureTextEx(font_medium, name_text.ptr, 18, 1).x;
             const name_rect = rl.Rectangle{ .x = 60, .y = y_pos, .width = name_width, .height = 20 };
             const name_hovered = rl.CheckCollisionPointRec(rl.GetMousePosition(), name_rect);
 
@@ -243,11 +251,11 @@ pub fn main() !void {
                 rl.Color{ .r = 150, .g = 200, .b = 255, .a = text_alpha }
             else
                 rl.Color{ .r = 255, .g = 255, .b = 255, .a = text_alpha };
-            rl.DrawTextEx(font, name_text.ptr, .{ .x = 60, .y = y_pos }, 18, 1, name_color);
+            rl.DrawTextEx(font_medium, name_text.ptr, .{ .x = 60, .y = y_pos }, 18, 1, name_color);
 
             // Executing indicator
             if (is_executing) {
-                rl.DrawTextEx(font, " (running...)", .{ .x = 60 + name_width + 5, .y = y_pos + 2 }, 14, 1, rl.Color{ .r = 255, .g = 200, .b = 50, .a = 255 });
+                rl.DrawTextEx(font_small, " (running...)", .{ .x = 60 + name_width + 5, .y = y_pos + 2 }, 14, 1, rl.Color{ .r = 255, .g = 200, .b = 50, .a = 255 });
             }
 
             // Buttons on the right
@@ -255,9 +263,13 @@ pub fn main() !void {
             const run_btn_x: f32 = @floatFromInt(screen_width - 125);
             const toggle_btn_x: f32 = @floatFromInt(screen_width - 65);
 
-            // Run Now button (green)
-            const run_btn = drawButton(run_btn_x, btn_y, 50, 22, "Run", rl.Color{ .r = 50, .g = 150, .b = 50, .a = 255 }, font);
-            if (isButtonClicked(run_btn)) {
+            // Run Now button (green, or gray if disabled)
+            const run_btn_color = if (job.enabled)
+                rl.Color{ .r = 50, .g = 150, .b = 50, .a = 255 }
+            else
+                rl.Color{ .r = 80, .g = 80, .b = 80, .a = 150 };
+            const run_btn = drawButton(run_btn_x, btn_y, 50, 22, "Run", run_btn_color, font_small);
+            if (job.enabled and isButtonClicked(run_btn)) {
                 runJobNow(allocator, job.id, app_config.debug) catch |err| {
                     std.debug.print("Failed to run job: {}\n", .{err});
                 };
@@ -273,7 +285,7 @@ pub fn main() !void {
             else
                 rl.Color{ .r = 50, .g = 120, .b = 180, .a = 255 };
             const toggle_label = if (job.enabled) "Disable" else "Enable";
-            const toggle_btn = drawButton(toggle_btn_x, btn_y, 55, 22, toggle_label, toggle_color, font);
+            const toggle_btn = drawButton(toggle_btn_x, btn_y, 55, 22, toggle_label, toggle_color, font_small);
             if (isButtonClicked(toggle_btn)) {
                 toggleJobEnabled(allocator, config, job.id, !job.enabled, app_config.debug) catch |err| {
                     std.debug.print("Failed to toggle job: {}\n", .{err});
@@ -296,7 +308,7 @@ pub fn main() !void {
                 else
                     std.fmt.bufPrintZ(&time_buf, "  in {d} min", .{mins}) catch "  ...";
 
-                rl.DrawTextEx(font, time_text.ptr, .{ .x = 60, .y = y_pos }, 14, 1, rl.Color{ .r = 100, .g = 200, .b = 255, .a = text_alpha });
+                rl.DrawTextEx(font_small, time_text.ptr, .{ .x = 60, .y = y_pos }, 14, 1, rl.Color{ .r = 100, .g = 200, .b = 255, .a = text_alpha });
                 y_pos += 20;
             }
 
@@ -316,7 +328,7 @@ pub fn main() !void {
                 else
                     rl.Color{ .r = 200, .g = 200, .b = 200, .a = 200 };
 
-                rl.DrawTextEx(font, status_text.ptr, .{ .x = 60, .y = y_pos }, 13, 1, status_color);
+                rl.DrawTextEx(font_small, status_text.ptr, .{ .x = 60, .y = y_pos }, 13, 1, status_color);
                 y_pos += 18;
             }
 
@@ -377,9 +389,9 @@ pub fn main() !void {
                                 // Measure line with this word
                                 var measure_buf: [128]u8 = undefined;
                                 const test_len = @min(word_end - wrap_start, 127);
-                                @memcpy(measure_buf[0..test_len], source_line[wrap_start..wrap_start + test_len]);
+                                @memcpy(measure_buf[0..test_len], source_line[wrap_start .. wrap_start + test_len]);
                                 measure_buf[test_len] = 0;
-                                const width = rl.MeasureTextEx(font, &measure_buf, font_size, 1).x;
+                                const width = rl.MeasureTextEx(font_small, &measure_buf, font_size, 1).x;
 
                                 if (width > max_tooltip_width and wrap_end > wrap_start) {
                                     // Line too long, wrap at last space (or force break)
@@ -405,7 +417,7 @@ pub fn main() !void {
                                 while (trimmed_len > 0 and source_line[wrap_start + trimmed_len - 1] == ' ') {
                                     trimmed_len -= 1;
                                 }
-                                @memcpy(wrapped_lines[num_wrapped_lines][0..trimmed_len], source_line[wrap_start..wrap_start + trimmed_len]);
+                                @memcpy(wrapped_lines[num_wrapped_lines][0..trimmed_len], source_line[wrap_start .. wrap_start + trimmed_len]);
                                 wrapped_lines[num_wrapped_lines][trimmed_len] = 0;
                                 wrapped_line_lens[num_wrapped_lines] = trimmed_len;
                                 num_wrapped_lines += 1;
@@ -425,7 +437,7 @@ pub fn main() !void {
                 // Calculate actual max width from wrapped lines
                 var actual_max_width: f32 = 200;
                 for (0..num_wrapped_lines) |li| {
-                    const w = rl.MeasureTextEx(font, &wrapped_lines[li], font_size, 1).x;
+                    const w = rl.MeasureTextEx(font_small, &wrapped_lines[li], font_size, 1).x;
                     if (w > actual_max_width) actual_max_width = w;
                 }
 
@@ -454,7 +466,7 @@ pub fn main() !void {
                 // Draw wrapped lines
                 var text_y = tooltip_y + 10;
                 for (0..num_wrapped_lines) |li| {
-                    rl.DrawTextEx(font, &wrapped_lines[li], .{ .x = adj_x + 10, .y = text_y }, font_size, 1, rl.Color{ .r = 220, .g = 220, .b = 220, .a = 255 });
+                    rl.DrawTextEx(font_small, &wrapped_lines[li], .{ .x = adj_x + 10, .y = text_y }, font_size, 1, rl.Color{ .r = 220, .g = 220, .b = 220, .a = 255 });
                     text_y += line_height;
                 }
             } else |_| {
@@ -471,11 +483,11 @@ pub fn main() !void {
 
                 var hint_buf: [256]u8 = undefined;
                 const hint1 = std.fmt.bufPrintZ(&hint_buf, "No status file found.", .{}) catch "No status file";
-                rl.DrawTextEx(font, hint1.ptr, .{ .x = tooltip_x + 10, .y = tooltip_y + 10 }, 14, 1, rl.Color{ .r = 180, .g = 180, .b = 180, .a = 255 });
+                rl.DrawTextEx(font_small, hint1.ptr, .{ .x = tooltip_x + 10, .y = tooltip_y + 10 }, 14, 1, rl.Color{ .r = 180, .g = 180, .b = 180, .a = 255 });
 
                 var path_hint_buf: [256]u8 = undefined;
                 const hint2 = std.fmt.bufPrintZ(&path_hint_buf, "Create: {s}/{s}.md", .{ app_config.status_dir, job_id }) catch "Create status file";
-                rl.DrawTextEx(font, hint2.ptr, .{ .x = tooltip_x + 10, .y = tooltip_y + 32 }, 13, 1, rl.Color{ .r = 130, .g = 160, .b = 200, .a = 255 });
+                rl.DrawTextEx(font_small, hint2.ptr, .{ .x = tooltip_x + 10, .y = tooltip_y + 32 }, 13, 1, rl.Color{ .r = 130, .g = 160, .b = 200, .a = 255 });
             }
         }
 
@@ -491,14 +503,14 @@ pub fn main() !void {
                 rl.Color{ .r = 40, .g = 40, .b = 60, .a = 245 },
             );
 
-            rl.DrawTextEx(font, "Jobs can write status to:", .{ .x = tooltip_x + 10, .y = tooltip_y + 10 }, 14, 1, rl.Color{ .r = 220, .g = 220, .b = 220, .a = 255 });
+            rl.DrawTextEx(font_small, "Jobs can write status to:", .{ .x = tooltip_x + 10, .y = tooltip_y + 10 }, 14, 1, rl.Color{ .r = 220, .g = 220, .b = 220, .a = 255 });
 
             var path_buf: [256]u8 = undefined;
             const tooltip_path = std.fmt.bufPrintZ(&path_buf, "{s}/[job-id].md", .{app_config.status_dir}) catch "[status-dir]/[job-id].md";
-            rl.DrawTextEx(font, tooltip_path.ptr, .{ .x = tooltip_x + 10, .y = tooltip_y + 30 }, 13, 1, rl.Color{ .r = 150, .g = 200, .b = 255, .a = 255 });
+            rl.DrawTextEx(font_small, tooltip_path.ptr, .{ .x = tooltip_x + 10, .y = tooltip_y + 30 }, 13, 1, rl.Color{ .r = 150, .g = 200, .b = 255, .a = 255 });
 
-            rl.DrawTextEx(font, "Hover job name to see status preview.", .{ .x = tooltip_x + 10, .y = tooltip_y + 54 }, 13, 1, rl.Color{ .r = 180, .g = 180, .b = 180, .a = 255 });
-            rl.DrawTextEx(font, "Click Run/Stop to control jobs.", .{ .x = tooltip_x + 10, .y = tooltip_y + 74 }, 13, 1, rl.Color{ .r = 180, .g = 180, .b = 180, .a = 255 });
+            rl.DrawTextEx(font_small, "Hover job name to see status preview.", .{ .x = tooltip_x + 10, .y = tooltip_y + 54 }, 13, 1, rl.Color{ .r = 180, .g = 180, .b = 180, .a = 255 });
+            rl.DrawTextEx(font_small, "Click Run/Stop to control jobs.", .{ .x = tooltip_x + 10, .y = tooltip_y + 74 }, 13, 1, rl.Color{ .r = 180, .g = 180, .b = 180, .a = 255 });
         }
 
         // Footer with refresh info
@@ -506,7 +518,7 @@ pub fn main() !void {
         var footer_buf: [128]u8 = undefined;
         const footer_text = std.fmt.bufPrintZ(&footer_buf, "Updated {d}s ago | R=refresh | Click buttons to control jobs", .{seconds_since_refresh}) catch "Press R to refresh";
         const footer_y: f32 = @floatFromInt(screen_height - 30);
-        rl.DrawTextEx(font, footer_text.ptr, .{ .x = 20, .y = footer_y }, 12, 1, rl.Color{ .r = 120, .g = 120, .b = 120, .a = 255 });
+        rl.DrawTextEx(font_small, footer_text.ptr, .{ .x = 20, .y = footer_y }, 12, 1, rl.Color{ .r = 120, .g = 120, .b = 120, .a = 255 });
     }
 
     // Cleanup
