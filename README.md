@@ -133,6 +133,65 @@ clawd-widget
 
 No polling the filesystem. No heavy frameworks. Just direct API calls.
 
+### 🤓 Tech Details for Nerds
+
+The widget communicates with the Clawdbot gateway via a simple REST API. All calls go to `POST /tools/invoke` with JSON payloads.
+
+**List Jobs:**
+```bash
+curl -X POST http://localhost:18789/tools/invoke \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "cron", "action": "list", "args": {"includeDisabled": true}}'
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "result": {
+    "details": {
+      "jobs": [
+        {
+          "id": "backup-daily",
+          "name": "Daily Backup",
+          "enabled": true,
+          "state": {
+            "nextRunAtMs": 1738310400000,
+            "lastRunAtMs": 1738224000000,
+            "lastStatus": "success: backed up 42 files"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+**Toggle Job Enabled State:**
+```bash
+curl -X POST http://localhost:18789/tools/invoke \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "cron", "action": "update", "args": {"jobId": "backup-daily", "patch": {"enabled": false}}}'
+```
+
+**Run Job Immediately:**
+
+The widget shells out to the CLI for force-run capability:
+```bash
+clawdbot cron run backup-daily --force --timeout 60000
+```
+
+**Debug Mode:**
+
+Use `-d` flag to see all API calls printed to stderr:
+```
+[DEBUG] POST http://localhost:18789/tools/invoke
+[DEBUG] Body: {"tool": "cron", "action": "list", "args": {"includeDisabled": true}}
+[DEBUG] Response status: http.Status.ok
+```
+
 ## 🎨 Customization
 
 **Background Images** (planned):
